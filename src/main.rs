@@ -11,7 +11,6 @@ use aes::cipher::{
 };
 
 // ================================================================================= //
-// Implements frequency analysis "scoring" a piece of English plaintext
 
 const LETTER_FREQ: [f64; 27] = [
     0.08167, 0.01492, 0.02782, 0.04253, 0.12702, 0.02228, 0.02015, // A-G
@@ -20,6 +19,7 @@ const LETTER_FREQ: [f64; 27] = [
     0.00978, 0.02360, 0.00150, 0.01974, 0.00074, 0.19181, // V-Z & space char
 ];
 
+// Implements frequency analysis by "scoring" a piece of English plaintext
 pub fn calc_letter_freq_score(s: &str) -> f64 {
     let mut counts = vec![0_u32; 27];
     let mut score: f64 = 0_f64;
@@ -64,7 +64,7 @@ pub fn base64_to_hex(b64value: String) -> String {
     hex::encode(decoded_string)
 }
 
-// Encrypts a message against another of the same length by XOR'ing in place
+// Encrypts a plaintext against another of the same length by XOR'ing in place
 pub fn fixed_xor(first_hex_value: String, second_hex_value: String) -> String {
     let first_decoded_string: Vec<u8> = hex::decode(first_hex_value).unwrap();
     let second_decoded_string: Vec<u8> = hex::decode(second_hex_value).unwrap();
@@ -87,12 +87,12 @@ pub fn break_single_byte_xor(hex_value: String) -> String {
             .iter()
             .map(|&b| b ^ i as u8)
             .collect();
-        let message = String::from_utf8_lossy(&result);
-        let score = calc_letter_freq_score(&message);
+        let plaintext = String::from_utf8_lossy(&result);
+        let score = calc_letter_freq_score(&plaintext);
 
         if score > highest_score {
             highest_score = score;
-            decrypted = String::from(message);
+            decrypted = String::from(plaintext);
         }
     }
 
@@ -114,12 +114,12 @@ pub fn detect_single_char_xor(path_to_file: String) -> String {
                         .iter()
                         .map(|&b| (b as u16) ^ i as u16)
                         .collect();
-                    let message = String::from_utf16(&result).unwrap();
-                    let score = calc_letter_freq_score(&message);
+                    let plaintext = String::from_utf16(&result).unwrap();
+                    let score = calc_letter_freq_score(&plaintext);
 
                     if score > highest_score {
                         highest_score = score;
-                        decrypted = String::from(message);
+                        decrypted = String::from(plaintext);
                     }
                 }
             }
@@ -140,8 +140,8 @@ fn break_single_char_xor(string: &Vec<u8>) -> u8 {
             .map(|&b| b ^ i)
             .collect();
 
-        let message = String::from_utf8_lossy(&result);
-        let score = calc_letter_freq_score(&message);
+        let plaintext = String::from_utf8_lossy(&result);
+        let score = calc_letter_freq_score(&plaintext);
 
         if score > highest_score {
             highest_score = score;
@@ -152,10 +152,10 @@ fn break_single_char_xor(string: &Vec<u8>) -> u8 {
     key
 }
 
-// Encrypts a message under a key using repeating-key XOR
-pub fn repeating_key_xor(message: &String, key: String) -> String {
+// Encrypts a plaintext under a key using repeating-key XOR
+pub fn repeating_key_xor(plaintext: &String, key: String) -> String {
     let mut encoded_key: String = String::new();
-    let hex_encoded_string: String = base64_to_hex(message.clone());
+    let hex_encoded_string: String = base64_to_hex(plaintext.clone());
     for _ in 0..(hex_encoded_string.len() / 6) {
         encoded_key.push_str(&hex::encode(key.clone()));
     }
@@ -208,10 +208,11 @@ pub fn transpose_blocks(blocks: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
 }
 
 // Instead of fiddling around with hamming distance
-// as suggested on cryptopals, I decided to iterate
+// as suggested on cryptopals, decided to iterate
 // through all 39 KEYSIZE values and display each key
 // formed from the individual bytes on XOR'ing against
-// the transposed KEYSIZE-length blocks of the text
+// the transposed KEYSIZE-length blocks of the text to
+// retrieve the most meaningful one
 pub fn break_repeating_key_xor(data: String) -> String {
     for key_size in 2..41 {
         let blocks = split_into_blocks(&base64::decode(&data).expect("Unable to decode"), &key_size);
@@ -232,10 +233,10 @@ pub fn break_repeating_key_xor(data: String) -> String {
     String::new()
 }
 
-// Decrypts message encrypted using AES-ECB
-pub fn aes_ecb(message: String, key: String) -> String {
+// Decrypts plaintext encrypted using AES-ECB
+pub fn aes_ecb(plaintext: String, key: String) -> String {
     let key = GenericArray::clone_from_slice(&key.as_bytes());
-    let decoded_string = base64::decode(message).unwrap();
+    let decoded_string = base64::decode(plaintext).unwrap();
     let mut blocks = Vec::new();
     for i in (0..decoded_string.len()).step_by(16) {
         blocks.push(GenericArray::clone_from_slice(&decoded_string[i..i + 16]));
@@ -249,6 +250,9 @@ pub fn aes_ecb(message: String, key: String) -> String {
         .collect()
 }
 
+// Detects AES-ECB encryption using Electronic Code Book's
+// stateless and deterministic property of producing the
+// same 16-byte ciphertext for any given 16-byte plaintext
 pub fn detect_aes_ecb(path_to_file: String) -> String {
     let mut max_duplicates = 0;
     let mut aes_hex = String::new();
@@ -276,6 +280,17 @@ pub fn detect_aes_ecb(path_to_file: String) -> String {
         }
     }
     aes_hex
+}
+
+// Implements PKCS#7 padding
+pub fn pkcs7_pad_block(block: String, length: u32) -> String {
+    let pad_length = length - block.as_bytes().len() as u32;
+    let mut padding = String::new();
+    for _ in 0..pad_length {
+        padding.push_str("\\x0");
+        padding.push_str(pad_length.to_string().as_str());
+    }
+    format!("{}{}", block, padding)
 }
 
 // Read lines from a file
@@ -308,4 +323,5 @@ pub fn main() {
             .collect()
             , String::from("YELLOW SUBMARINE")));
     println!("Set 1 - Challenge 8:\n{}", detect_aes_ecb(String::from("./input-q8.txt")));
+    println!("Set 2 - Challenge 9:\n{}", pkcs7_pad_block(String::from("YELLOW SUBMARINE"), 20));
 }
