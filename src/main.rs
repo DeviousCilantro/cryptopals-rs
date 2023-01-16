@@ -4,6 +4,11 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::fs::File;
 use std::fs;
+use aes::Aes128;
+use aes::cipher::{
+    BlockDecrypt, KeyInit,
+    generic_array::GenericArray,
+};
 
 // ================================================================================= //
 // Implements frequency analysis "scoring" a piece of English plaintext
@@ -185,6 +190,23 @@ pub fn split_into_blocks(iterable: &Vec<u8>, block_size: &usize) -> Vec<Vec<u8>>
 
 }
 
+// Transposes the blocks of a vector of byte vectors
+// so the first element of the vector consists of
+// the first byte of every block and so on
+pub fn transpose_blocks(blocks: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    let mut init_transposed_blocks: Vec<u8> = Vec::new();
+    let mut transposed_blocks: Vec<Vec<u8>> = Vec::new();
+    for i in 0..blocks[0].len() {
+        for element in blocks {
+           if element.len() <= i { break; }
+           init_transposed_blocks.push(element[i]);
+        }
+        transposed_blocks.push(init_transposed_blocks);
+        init_transposed_blocks = Vec::new();
+    }
+    transposed_blocks
+}
+
 // Instead of fiddling around with hamming distance
 // as suggested on cryptopals, I decided to iterate
 // through all 39 KEYSIZE values and display each key
@@ -210,22 +232,21 @@ pub fn break_repeating_key_xor(data: String) -> String {
     String::new()
 }
 
-
-// Transposes the blocks of a vector of byte vectors
-// so the first element of the vector consists of
-// the first byte of every block and so on
-pub fn transpose_blocks(blocks: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
-    let mut init_transposed_blocks: Vec<u8> = Vec::new();
-    let mut transposed_blocks: Vec<Vec<u8>> = Vec::new();
-    for i in 0..blocks[0].len() {
-        for element in blocks {
-           if element.len() <= i { break; }
-           init_transposed_blocks.push(element[i]);
-        }
-        transposed_blocks.push(init_transposed_blocks);
-        init_transposed_blocks = Vec::new();
+// Decrypts message encrypted using AES-ECB
+pub fn aes_ecb(message: String, key: String) -> String {
+    let key = GenericArray::clone_from_slice(&key.as_bytes());
+    let decoded_string = base64::decode(message).unwrap();
+    let mut blocks = Vec::new();
+    for i in (0..decoded_string.len()).step_by(16) {
+        blocks.push(GenericArray::clone_from_slice(&decoded_string[i..i + 16]));
     }
-    transposed_blocks
+    Aes128::new(&key)
+        .decrypt_blocks(&mut blocks);
+    blocks
+        .iter()
+        .flatten()
+        .map(|&x| x as char)
+        .collect()
 }
 
 // Read lines from a file
@@ -236,18 +257,25 @@ where P: AsRef<Path>, {
 }
 
 pub fn main() {
-    println!("Set 1 - Challenge 1: {}", hex_to_base64(String::from("49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d")));
-    println!("Set 1 - Challenge 2: {}", fixed_xor(String::from("1c0111001f010100061a024b53535009181c"), String::from("686974207468652062756c6c277320657965")));
-    println!("Set 1 - Challenge 3: {:?}", break_single_byte_xor(String::from("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")));
-    println!("Set 1 - Challenge 4: {:?}", detect_single_char_xor(String::from("./input-q4.txt")));
-    println!("Set 1 - Challenge 5: {}", repeating_key_xor(&base64::encode(String::from(
+    println!("Set 1 - Challenge 1:\n{}", hex_to_base64(String::from("49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d")));
+    println!("Set 1 - Challenge 2:\n {}", fixed_xor(String::from("1c0111001f010100061a024b53535009181c"), String::from("686974207468652062756c6c277320657965")));
+    println!("Set 1 - Challenge 3:\n {:?}", break_single_byte_xor(String::from("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")));
+    println!("Set 1 - Challenge 4:\n {:?}", detect_single_char_xor(String::from("./input-q4.txt")));
+    println!("Set 1 - Challenge 5:\n {}", repeating_key_xor(&base64::encode(String::from(
         "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal"
     )), String::from("ICE")));
-    println!("Set 1 - Challenge 6: {}", break_repeating_key_xor(
+    println!("Set 1 - Challenge 6:\n{}", break_repeating_key_xor(
             fs::read_to_string("./input_q6.txt")
             .unwrap()
             .chars()
             .filter(|c| !c.is_whitespace())
             .collect()
             ));
+    println!("\nSet 1 - Challenge 7:\n{}", aes_ecb(
+            fs::read_to_string("./input-q7.txt")
+            .unwrap()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect()
+            , String::from("YELLOW SUBMARINE")));
 }
