@@ -125,7 +125,7 @@ pub fn detect_single_char_xor(path_to_file: String) -> String {
             }
         }
     }
-    
+
     decrypted
 }
 
@@ -198,8 +198,8 @@ pub fn transpose_blocks(blocks: &Vec<Vec<u8>>) -> Vec<Vec<u8>> {
     let mut transposed_blocks: Vec<Vec<u8>> = Vec::new();
     for i in 0..blocks[0].len() {
         for element in blocks {
-           if element.len() <= i { break; }
-           init_transposed_blocks.push(element[i]);
+            if element.len() <= i { break; }
+            init_transposed_blocks.push(element[i]);
         }
         transposed_blocks.push(init_transposed_blocks);
         init_transposed_blocks = Vec::new();
@@ -249,6 +249,35 @@ pub fn aes_ecb(message: String, key: String) -> String {
         .collect()
 }
 
+pub fn detect_aes_ecb(path_to_file: String) -> String {
+    let mut max_duplicates = 0;
+    let mut aes_hex = String::new();
+    if let Ok(lines) = read_lines(path_to_file) {
+        for line in lines {
+            if let Ok(hex_value) = line {
+                let mut duplicates = 0;
+                let decoded_string = hex::decode(&hex_value.trim()).unwrap();
+                let mut blocks = split_into_blocks(&decoded_string, &(16 as usize));
+                for i in 0..blocks.len() {
+                    for j in 0..blocks.len() {
+                        if j == i { continue; }
+                        if blocks[j] == Vec::new() { continue; }
+                        if blocks[j] == blocks[i] {
+                            duplicates += 1;
+                            blocks[j] = Vec::new();
+                        }
+                    }
+                }
+                if duplicates > max_duplicates {
+                    max_duplicates = duplicates;
+                    aes_hex = hex_value.clone();
+                }
+            }
+        }
+    }
+    aes_hex
+}
+
 // Read lines from a file
 pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where P: AsRef<Path>, {
@@ -262,7 +291,7 @@ pub fn main() {
     println!("Set 1 - Challenge 3:\n {:?}", break_single_byte_xor(String::from("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")));
     println!("Set 1 - Challenge 4:\n {:?}", detect_single_char_xor(String::from("./input-q4.txt")));
     println!("Set 1 - Challenge 5:\n {}", repeating_key_xor(&base64::encode(String::from(
-        "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal"
+                    "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal"
     )), String::from("ICE")));
     println!("Set 1 - Challenge 6:\n{}", break_repeating_key_xor(
             fs::read_to_string("./input_q6.txt")
@@ -270,7 +299,7 @@ pub fn main() {
             .chars()
             .filter(|c| !c.is_whitespace())
             .collect()
-            ));
+    ));
     println!("\nSet 1 - Challenge 7:\n{}", aes_ecb(
             fs::read_to_string("./input-q7.txt")
             .unwrap()
@@ -278,4 +307,5 @@ pub fn main() {
             .filter(|c| !c.is_whitespace())
             .collect()
             , String::from("YELLOW SUBMARINE")));
+    println!("Set 1 - Challenge 8:\n{}", detect_aes_ecb(String::from("./input-q8.txt")));
 }
